@@ -1,4 +1,10 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -86,7 +92,7 @@ bool do_exec(int count, ...)
 			perror("execv");
 			exit(EXIT_FAILURE);
 		}
-
+	}
 	else { // parent process
 		int status;
 		pid_t child_pid = wait(&status);
