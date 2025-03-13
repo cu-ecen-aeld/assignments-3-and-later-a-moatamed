@@ -16,8 +16,19 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+	int ret;
 
-    return true;
+	ret = system(cmd);
+
+	// check for invocation error in system().
+	if (ret == -1)
+		return false;
+
+	// check if the command excuted successfully.
+	if (WIFEXITED(ret) && WEXITSTATUS(ret) == 0)
+		return true;
+
+    return false;
 }
 
 /**
@@ -59,6 +70,42 @@ bool do_exec(int count, ...)
  *
 */
 
+	pid_t pid = fork();
+
+	// manage fork failure.
+	if ( pid == -1){
+		perror("fork");
+		va_end(args);
+		return false;
+	}
+
+
+	if (pid == 0){ // child process
+		int ret = execv(command[0], command + 1);
+		if (ret == -1){ // execv failure
+			perror("execv");
+			exit(EXIT_FAILURE);
+		}
+
+	else { // parent process
+		int status;
+		pid_t child_pid = wait(&status);
+		if (child_pid == -1){
+			perror("wait");
+			va_end(args);
+			return false;
+		}
+		// check if the process exited successfully.
+		if (WIFEXITED(status) && WEXITSTATUS(status) == 0){
+			va_end(args);
+			return true;
+		}
+
+		else {
+			va_end(args);
+			return false;
+		}
+	}
     va_end(args);
 
     return true;
@@ -93,7 +140,59 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
-    va_end(args);
+	// Open the file where the output will be redirected
+    int fd = open(outputfile, O_WRONLY | O_TRUNC | O_CREAT, 0664);
+    if (fd < 0) {
+        perror("open");
+        va_end(args);
+        return false;
+    }
 
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        close(fd); // Close the file descriptor before returning
+        va_end(args);
+        return false;
+    } else if (pid == 0) { // Child process
+        // Redirect stdout (file descriptor 1) to the file
+        if (dup2(fd, 1) == -1) {
+            perror("dup2");
+            close(fd); // Close the file descriptor before returning
+            va_end(args);
+            return false;
+        }
+
+        close(fd); // File descriptor no longer needed after duplication
+
+        // Execute the command with execv
+        if (execv(command[0], command + 1) == -1) {
+            perror("execv");
+            va_end(args);
+            return false;
+        }
+    } else { // Parent process
+        close(fd); // Close the file descriptor in the parent
+
+        // Wait for the child process to finish
+        int status;
+        pid_t child_pid = wait(&status);
+        if (child_pid == -1) {
+            perror("wait");
+            va_end(args);
+            return false;
+        }
+
+        // Check if the child process exited successfully
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            va_end(args);
+            return true;
+        } else {
+            va_end(args);
+            return false;
+        }
+    }
+
+    va_end(args);
     return true;
 }
