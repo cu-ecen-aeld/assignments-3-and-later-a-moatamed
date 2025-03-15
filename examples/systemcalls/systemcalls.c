@@ -5,6 +5,8 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
+
 
 /**
  * @param cmd the command to execute with system()
@@ -62,9 +64,7 @@ bool do_exec(int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
+
 
 /*
  * TODO:
@@ -76,42 +76,34 @@ bool do_exec(int count, ...)
  *
 */
 
-	pid_t pid = fork();
+	int status;
+    pid_t pid = fork();
 
-	// manage fork failure.
-	if ( pid == -1){
+    if (pid == -1) {
 		perror("fork");
 		va_end(args);
-		return false;
-	}
-
-
-	if (pid == 0){ // child process
-		int ret = execv(command[0], command + 1);
-		if (ret == -1){ // execv failure
-			perror("execv");
-			exit(EXIT_FAILURE);
-		}
-	}
-	else { // parent process
-		int status;
-		pid_t child_pid = wait(&status);
-		if (child_pid == -1){
+        return false; // Fork failed
+    }
+	else if (pid == 0) { // Child process
+        int ret = execv(command[0], command);
+        if (ret == -1) {
+			va_end(args);
+            perror("execv"); // Print error if execv fails
+            exit(EXIT_FAILURE); // Exit the child process with failure
+        }
+    } 
+	else { // Parent process
+        if (wait(&status) == -1) {
 			perror("wait");
 			va_end(args);
-			return false;
-		}
-		// check if the process exited successfully.
-		if (WIFEXITED(status) && WEXITSTATUS(status) == 0){
+            return false; // Wait failed
+        } else if (WIFEXITED(status)) {
 			va_end(args);
-			return true;
-		}
+            return WEXITSTATUS(status) == 0; // Return true if the command exit>
+        }
+    }
 
-		else {
-			va_end(args);
-			return false;
-		}
-	}
+
     va_end(args);
 
     return true;
@@ -133,9 +125,6 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
 
 
 /*
@@ -146,58 +135,49 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
-	// Open the file where the output will be redirected
-    int fd = open(outputfile, O_WRONLY | O_TRUNC | O_CREAT, 0664);
-    if (fd < 0) {
-        perror("open");
-        va_end(args);
-        return false;
-    }
+	int fd = open(outputfile, O_WRONLY | O_TRUNC | O_CREAT, 0664);
+	if (fd < 0){
+		perror("open");
+		va_end(args);
+		return false;
+	}
 
+	int status;
     pid_t pid = fork();
+
     if (pid == -1) {
-        perror("fork");
-        close(fd); // Close the file descriptor before returning
+		perror("fork");
+		close(fd);
         va_end(args);
-        return false;
-    } else if (pid == 0) { // Child process
-        // Redirect stdout (file descriptor 1) to the file
-        if (dup2(fd, 1) == -1) {
-            perror("dup2");
-            close(fd); // Close the file descriptor before returning
-            va_end(args);
-            return false;
+        return false; // Fork failed
+    } 
+    else if (pid == 0) { // Child process
+		if (dup2(fd, 1) < 0){
+			perror("dup");
+			close(fd);
+			va_end(args);
+			exit(EXIT_FAILURE);
+		}
+		close(fd);
+        int ret = execv(command[0], command);
+        if (ret == -1) {
+            perror("execv"); // Print error if execv fails
+            exit(EXIT_FAILURE); // Exit the child process with failure
         }
-
-        close(fd); // File descriptor no longer needed after duplication
-
-        // Execute the command with execv
-        if (execv(command[0], command + 1) == -1) {
-            perror("execv");
+    } 
+    else { // Parent process
+		close(fd);
+        if (wait(&status) == -1) {
+			perror("wait");
             va_end(args);
-            return false;
-        }
-    } else { // Parent process
-        close(fd); // Close the file descriptor in the parent
-
-        // Wait for the child process to finish
-        int status;
-        pid_t child_pid = wait(&status);
-        if (child_pid == -1) {
-            perror("wait");
+            return false; // Wait failed
+        } else if (WIFEXITED(status)) {
             va_end(args);
-            return false;
-        }
-
-        // Check if the child process exited successfully
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-            va_end(args);
-            return true;
-        } else {
-            va_end(args);
-            return false;
+            return WEXITSTATUS(status) == 0; // Return true if the command exit>
         }
     }
+
+
 
     va_end(args);
     return true;
