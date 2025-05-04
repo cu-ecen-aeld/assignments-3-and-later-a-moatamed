@@ -46,7 +46,7 @@ fi
 
 echo "Adding the Image in outdir"
 # Copy the Image to the output directory
-echo "Copying the final image to the ${OUT_DIR} directory ......."
+echo "Copying the final image to the OUT_DIR directory ......."
 cp ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ${OUTDIR}/Image
 
 echo "Creating the staging directory for the root filesystem"
@@ -114,7 +114,7 @@ cp ${FINDER_APP_DIR}/writer ${OUTDIR}/rootfs/home/
 # on the target rootfs
 
 cp ${FINDER_APP_DIR}/finder.sh ${OUTDIR}/rootfs/home/
-cp -r ${FINDER_APP_DIR}/conf ${OUTDIR}/rootfs/home/
+cp -r ${FINDER_APP_DIR}/../conf ${OUTDIR}/rootfs/home/
 cp ${FINDER_APP_DIR}/finder-test.sh ${OUTDIR}/rootfs/home/
 
 cp ${FINDER_APP_DIR}/autorun-qemu.sh ${OUTDIR}/rootfs/home/
